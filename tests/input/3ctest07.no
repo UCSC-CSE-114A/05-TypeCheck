@@ -1,0 +1,2 @@
+top =
+  if True then \(x :: Int) -> x else \(x :: Int) -> x + 5

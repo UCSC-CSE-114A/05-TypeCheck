@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+-- {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE InstanceSigs #-}
 
 module Language.Nano.Types where
@@ -7,58 +7,75 @@ import           GHC.Exts( IsString(..) )
 import           Text.Printf (printf)
 import qualified Data.List as L
 
-import           Control.Exception
-import           Data.Typeable
+-- import           Control.Exception
+-- import           Data.Typeable
 
-data Error = Error {errMsg :: String}
-             deriving (Show, Typeable)
+-- import Data.Char (isAlpha, isAlphaNum, isDigit)
+-- import Data.List (isInfixOf)
+-- import Text.ParserCombinators.ReadP
 
-instance Exception Error
 
-{- AST -}
+
+--------------------------------------------------------------------------------
+-- Types and expressions
+--------------------------------------------------------------------------------
 
 data Binop
   = Plus
   | Minus
   | Mul
   | Eq
-  | Ne
   | Lt
   | Le
+  | Ne
   | And
   | Or
   | Cons
-  deriving (Eq, Ord)
+  deriving (Eq,Ord)
+
+data Type
+  = TInt               -- Int
+  | TBool              -- Bool
+  | TFun Type Type     -- T1 -> T2
+  | TIntList           -- [Int]
+  deriving (Eq)
 
 type Id = String
-
-instance IsString Expr where
-  fromString :: String -> Expr
-  fromString = EVar
 
 data Expr
   = EInt  Int
   | EBool Bool
   | ENil
-  | EVar Id
-  | EBin Binop Expr Expr
-  | EIf  Expr Expr  Expr
-  | ELet Id   Expr  Expr
-  | EApp Expr Expr
-  | ELam Id   Expr
-  deriving (Eq)
+  | EVar  Id
+  | EBin  Binop Expr Expr
+  | EIf   Expr Expr Expr
+  | ELam  Id Type Expr          -- \(x : T) -> e
+  | EApp  Expr Expr
+  | ELet  Id Type Expr Expr     -- let x : t = e1 in e2   (recursive: x is in scope in e1)
 
 data Value
-  = VInt  Int
+  = VInt Int
   | VBool Bool
-  | VClos Env Id Expr
   | VNil
   | VPair Value Value
-  | VErr  String
-  | VPrim (Value -> Value)
+  | VErr String
+  | VClos Env Id Expr           -- closure: environment, parameter, body
+  | VPrim (Value -> Value)      -- built-in function
 
+-- | The result of type checking: a type, or an error message
+data TypeOrError = Ok Type | Error String
+  deriving (Show)
+
+-- | Type environment: maps variables to their types
+type TypeEnv = [(Id, Type)]
 -- | Environment: maps variables to their values  
 type Env = [(Id, Value)]
+
+instance Eq TypeOrError where
+  (==) :: TypeOrError -> TypeOrError -> Bool
+  (Ok t1) == (Ok t2) = t1 == t2
+  Error _ == Error _ = True
+  _       == _       = False
 
 instance Eq Value where
   (==) :: Value -> Value -> Bool
@@ -66,44 +83,10 @@ instance Eq Value where
   (VBool x1)    == (VBool x2)    = x1 == x2
   VNil          == VNil          = True
   (VPair x1 y1) == (VPair x2 y2) = x1 == x2 && y1 == y2
+  (VErr x)      == (VErr y)      = True
   _             == _             = False
   
-{- Types -}
 
-type TId = String
-
-data Type
-  = TInt             -- Int
-  | TBool            -- Bool
-  | Type :=> Type    -- T1 -> T2
-  | TVar TId        -- a, b, c
-  | TList Type       -- [T]
-  deriving (Eq, Ord)
-  
-infixr 2 :=>
-
-instance IsString Type where
-  fromString :: String -> Type
-  fromString = TVar
-  
-data Poly = Mono Type 
-          | Forall TId Poly
-          deriving Eq
-          
--- Convenience function to create a list type           
-list :: Type -> Type
-list = TList
-
--- Convenience function to create a forall with one type parameter
-forall :: TId -> Type -> Poly
-forall a t = Forall a $ Mono t          
-
--- | Type substitution: maps type variables to types
-type Subst = [(TId, Type)]
-
-  
--- | Type environment: maps variables to their (poly-)types  
-type TypeEnv = [(Id, Poly)]  
   
 {- Pretty printing -}  
 
@@ -123,9 +106,9 @@ instance Show Type where
   show :: Type -> String
   show = typeString
   
-instance Show Poly where
-  show :: Poly -> String
-  show = polyString
+instance IsString Expr where
+  fromString :: String -> Expr
+  fromString = EVar
   
 binopString :: Binop -> String
 binopString Plus  = "+"
@@ -134,10 +117,10 @@ binopString Mul   = "*"
 binopString Eq    = "=="
 binopString Ne    = "!="
 binopString Lt    = "<"
-binopString Le    = "<="
 binopString And   = "&&"
 binopString Or    = "||"
 binopString Cons  = ":"
+binopString Le    = "<="
 
 valueString :: Value -> String
 valueString (VInt i)        = printf "%d" i
@@ -159,21 +142,17 @@ exprString (EBool b)      = printf "%s" (show b)
 exprString (EVar x)       = x
 exprString (EBin o e1 e2) = printf "(%s %s %s)" (show e1) (show o) (show e2)
 exprString (EIf c t e)    = printf "if %s then %s else %s" (show c) (show t) (show e)
-exprString (ELet x e e')  = printf "let %s = %s in \n %s" x (show e) (show e')
+exprString (ELet x t e e')  = printf "let %s : %s = %s in \n %s" x (show t) (show e) (show e')
 exprString (EApp e1 e2)   = printf "((%s) %s)" (show e1) (show e2)
-exprString (ELam x e)     = printf "\\%s -> %s" x (show e)
+exprString (ELam x t e)     = printf "\\(%s : %s) -> %s" x (show t) (show e)
 exprString ENil           = "[]"
 
 typeString :: Type -> String
 typeString (TInt)       = "Int"
 typeString (TBool)      = "Bool"
-typeString (t1 :=> t2)  = printf "(%s) -> %s" (show t1) (show t2)
-typeString (TVar x)     = x
-typeString (TList t)    = printf "[%s]" (show t)
+typeString (TFun t1 t2) = printf "(%s) -> %s" (show t1) (show t2)
+typeString (TIntList)   = "List Int"
 
-polyString :: Poly -> String
-polyString (Mono t) = typeString t
-polyString (Forall a p) = "forall " ++ a ++ " . " ++ polyString p
 
 --------------------------------------------------------------------------------
 class Nano a where

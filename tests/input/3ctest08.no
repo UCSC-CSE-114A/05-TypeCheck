@@ -1,0 +1,5 @@
+top =
+  let id (x :: Int) :: Int = x + 1 in
+  let a1 :: Int = id 7 in
+  let a2 :: Int = id True in
+  True

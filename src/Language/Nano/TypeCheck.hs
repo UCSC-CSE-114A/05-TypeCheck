@@ -6,178 +6,185 @@ module Language.Nano.TypeCheck where
 import Language.Nano.Types
 import Language.Nano.Parser
 
-import qualified Data.List as L
-import           Text.Printf (printf)  
-import           Control.Exception (throw)
+-- import qualified Data.List as L
+-- import           Text.Printf (printf)  
+-- import           Control.Exception (throw)
 
 --------------------------------------------------------------------------------
-typeOfFile :: FilePath -> IO Type
+-- For printing the resulting type of an expression
+--------------------------------------------------------------------------------
+
+-- The initial type environment is empty
+initTypeEnv :: TypeEnv
+initTypeEnv = preludeTypes
+
+typeOfFile :: FilePath -> IO TypeOrError
 typeOfFile f = parseFile f >>= typeOfExpr
 
-typeOfString :: String -> IO Type
+typeOfString :: String -> IO TypeOrError
 typeOfString s = typeOfExpr (parseString s)
 
-typeOfExpr :: Expr -> IO Type
-typeOfExpr e = do
-  let (!st, t) = infer initInferState preludeTypes e
-  if (length (stSub st)) < 0 then throw (Error ("count Negative: " ++ show (stCnt st)))
-  else return t
+typeOfExpr :: Expr -> IO TypeOrError
+typeOfExpr e = return (typeCheck initTypeEnv e)
+
 
 --------------------------------------------------------------------------------
--- Problem 1: Warm-up
+-- Helper Functions for manipulating types/type environments
 --------------------------------------------------------------------------------
-
--- | Things that have free type variables
-class HasTVars a where
-  freeTVars :: a -> [TId]
-
--- | Type variables of a type
-instance HasTVars Type where
-  freeTVars :: Type -> [TId]
-  freeTVars t     = error "TBD: type freeTVars"
-
--- | Free type variables of a poly-type (remove forall-bound vars)
-instance HasTVars Poly where
-  freeTVars :: Poly -> [TId]
-  freeTVars s     = error "TBD: poly freeTVars"
-
--- | Free type variables of a type environment
-instance HasTVars TypeEnv where
-  freeTVars :: TypeEnv -> [TId]
-  freeTVars gamma   = concat [freeTVars s | (x, s) <- gamma]  
   
 -- | Look up a variable in a type environment
-lookupVarType :: Id -> TypeEnv -> Poly
-lookupVarType x ((y, s) : gamma)
-  | x == y    = s
+lookupVarType :: Id -> TypeEnv -> TypeOrError
+lookupVarType x ((y, t) : gamma)
+  | x == y    = Ok t
   | otherwise = lookupVarType x gamma
-lookupVarType x [] = throw (Error ("unbound variable: " ++ x))
+lookupVarType x [] = Error ("unbound variable: " ++ x)
 
 -- | Extend a type environment with a new binding
-extendTypeEnv :: Id -> Poly -> TypeEnv -> TypeEnv
+extendTypeEnv :: Id -> Type -> TypeEnv -> TypeEnv
 extendTypeEnv x s gamma = (x,s) : gamma  
 
--- | Look up a type variable in a substitution;
---   if not present, return the variable unchanged
-lookupTVar :: TId -> Subst -> Type
-lookupTVar a sub = error "TBD: lookupTVar"
-
--- | Remove a type variable from a substitution
-removeTVar :: TId -> Subst -> Subst
-removeTVar a sub = error "TBD: removeTVar"
-     
--- | Things to which type substitutions can be applied
-class Substitutable a where
-  apply :: Subst -> a -> a
-  
--- | Apply substitution to type
-instance Substitutable Type where  
-  apply :: Subst -> Type -> Type
-  apply sub t         = error "TBD: type apply"
-
--- | Apply substitution to poly-type
-instance Substitutable Poly where    
-  apply :: Subst -> Poly -> Poly
-  apply sub s         = error "TBD: poly apply"
-
--- | Apply substitution to (all poly-types in) another substitution
-instance Substitutable Subst where  
-  apply :: Subst -> Subst -> Subst
-  apply sub to = zip keys (map (apply sub) vals)
-    where
-      (keys, vals) = unzip to
-      
--- | Apply substitution to a type environment
-instance Substitutable TypeEnv where  
-  apply :: Subst -> TypeEnv -> TypeEnv
-  apply sub gamma = zip keys (map (apply sub) vals)
-    where
-      (keys, vals) = unzip gamma
-      
--- | Extend substitution with a new type assignment
-extendSubst :: Subst -> TId -> Type -> Subst
-extendSubst sub a t = error "TBD: extendSubst"
-      
 --------------------------------------------------------------------------------
--- Problem 2: Unification
+-- TODO: the type checker
 --------------------------------------------------------------------------------
-      
--- | State of the type inference algorithm      
-data InferState = InferState { 
-    stSub :: Subst -- ^ current substitution
-  , stCnt :: Int   -- ^ number of fresh type variables generated so far
-} deriving (Eq,Show)
 
--- | Initial state: empty substitution; 0 type variables
-initInferState = InferState [] 0
+-- the function you are implementing
+typeCheck :: TypeEnv -> Expr -> TypeOrError
 
--- | Fresh type variable number n
-freshTV n = TVar ("a" ++ show n)
-    
--- | Extend the current substitution of a state with a new type assignment   
-extendState :: InferState -> TId -> Type -> InferState
-extendState (InferState sub n) a t = InferState (extendSubst sub a t) n
-        
--- | Unify a type variable with a type; 
---   if successful return an updated state, otherwise throw an error
-unifyTVar :: InferState -> TId -> Type -> InferState
-unifyTVar st a t = error "TBD: unifyTVar"
-    
--- | Unify two types;
---   if successful return an updated state, otherwise throw an error
-unify :: InferState -> Type -> Type -> InferState
-unify st t1 t2 = error "TBD: unify"
+-- Problem 1: constants, variables, if
+typeCheck _   (EInt _)  = Ok TInt
+typeCheck _   (EBool _) = Ok TBool
+typeCheck env (EVar x)  = lookupVarType x env
+typeCheck env (EIf c e1 e2) =
+  case (typeCheck env c, typeCheck env e1, typeCheck env e2) of
+    (Error m, _, _)    -> Error m
+    (_, Error m, _)    -> Error m
+    (_, _, Error m)    -> Error m
+    (Ok tc, Ok t1, Ok t2)
+      | tc /= TBool    -> Error "type error"
+      | t1 /= t2       -> Error "type error"
+      | otherwise      -> Ok t1
 
---------------------------------------------------------------------------------
--- Problem 3: Type Inference
---------------------------------------------------------------------------------    
-  
-infer :: InferState -> TypeEnv -> Expr -> (InferState, Type)
-infer st _   (EInt _)          = error "TBD: infer EInt"
-infer st _   (EBool _)         = error "TBD: infer EBool"
-infer st gamma (EVar x)        = error "TBD: infer EVar"
-infer st gamma (ELam x body)   = error "TBD: infer ELam"
-infer st gamma (EApp e1 e2)    = error "TBD: infer EApp"
-infer st gamma (ELet x e1 e2)  = error "TBD: infer ELet"
-infer st gamma (EBin op e1 e2) = infer st gamma asApp
-  where
-    asApp = EApp (EApp opVar e1) e2
-    opVar = EVar (show op)
-infer st gamma (EIf c e1 e2) = infer st gamma asApp
-  where
-    asApp = EApp (EApp (EApp ifVar c) e1) e2
-    ifVar = EVar "if"    
-infer st gamma ENil = infer st gamma (EVar "[]")
+-- Problem 2: Binary operations
+typeCheck env (EBin op e1 e2) =
+  case op of
+    Plus  -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok TInt, Ok TInt) -> Ok TInt
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+                _            -> Error "type error"
+    Minus -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok TInt, Ok TInt) -> Ok TInt
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+                _            -> Error "type error"
+    Mul   -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok TInt, Ok TInt) -> Ok TInt
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+                _            -> Error "type error"
+    Eq    -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok t1, Ok t2) -> if t1 == t2 then Ok TBool else Error "type error"
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+    Lt    -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok TInt, Ok TInt) -> Ok TBool
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+                _            -> Error "type error"
+    Le    -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok TInt, Ok TInt) -> Ok TBool
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+                _            -> Error "type error"
+    Ne    -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok t1, Ok t2) -> if t1 == t2 then Ok TBool else Error "type error"
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+    And   -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok TBool, Ok TBool) -> Ok TBool
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+                _            -> Error "type error"
+    Or    -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok TBool, Ok TBool) -> Ok TBool
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+                _            -> Error "type error"
+    Cons  -> case (typeCheck env e1, typeCheck env e2) of
+                (Ok TInt, Ok TIntList) -> Ok TIntList
+                (Error m, _) -> Error m
+                (_, Error m) -> Error m
+                _            -> Error "type error"
 
--- | Generalize type variables inside a type
-generalize :: TypeEnv -> Type -> Poly
-generalize gamma t = error "TBD: generalize"
-    
--- | Instantiate a polymorphic type into a mono-type with fresh type variables
-instantiate :: Int -> Poly -> (Int, Type)
-instantiate n s = helper n [] s
-  where
-    helper :: Int -> Subst -> Poly -> (Int, Type)
-    helper n sub (Mono t)     = (n, apply sub t)
-    helper n sub (Forall a s) = helper (n + 1) ((a, freshTV n):sub) s
-      
--- | Types of built-in operators and functions      
+
+-- Problem 3: functions, application, let
+
+typeCheck env (ELam x t body) =
+  case typeCheck (extendTypeEnv x t env) body of
+    Error m -> Error m
+    Ok tb   -> Ok (TFun t tb)
+
+typeCheck env (EApp e1 e2) =
+  case (typeCheck env e1, typeCheck env e2) of
+    (Error m, _)  -> Error m
+    (_, Error m)  -> Error m
+    (Ok (TFun targ tres), Ok t2) -> if targ == t2 then Ok tres else Error "type error"
+    (Ok _, Ok _)   -> Error "type error"
+
+typeCheck env (ELet x t e1 e2) =
+  let env' = extendTypeEnv x t env in
+  case (typeCheck env' e1, typeCheck env' e2) of
+    (Error m,_) -> Error m
+    (_,Error m) -> Error m
+    (Ok t1,Ok t2) -> if t == t1 then Ok t2 else Error "type error"
+
+
+-- Problem 4: lists (of Int)
+typeCheck _ ENil = Ok TIntList
+
+
+
+-- | Types of built-in operators and functions.
+--   The parser turns  e1 + e2  into  EApp (EApp (EVar "+") e1) e2.
+
 preludeTypes :: TypeEnv
 preludeTypes =
-  [ ("+",    Mono (TInt :=> TInt :=> TInt))
-  , ("-",    error "TBD: -")
-  , ("*",    error "TBD: *")
-  , ("/",    error "TBD: /")
-  , ("==",   error "TBD: ==")
-  , ("!=",   error "TBD: !=")
-  , ("<",    error "TBD: <")
-  , ("<=",   error "TBD: <=")
-  , ("&&",   error "TBD: &&")
-  , ("||",   error "TBD: ||")
-  , ("if",   error "TBD: if")
-  -- lists: 
-  , ("[]",   error "TBD: []")
-  , (":",    error "TBD: :")
-  , ("head", error "TBD: head")
-  , ("tail", error "TBD: tail")
+  [
+  --   ("+",    TFun TInt (TFun TInt TInt))
+  -- , ("-",    TFun TInt (TFun TInt TInt))
+  -- , ("*",    TFun TInt (TFun TInt TInt))
+  -- , ("==",   TFun TInt (TFun TInt TBool))
+  -- , ("/=",   TFun TInt (TFun TInt TBool))
+  -- , ("<",    TFun TInt (TFun TInt TBool))
+  -- , ("<=",   TFun TInt (TFun TInt TBool))
+  -- , ("&&",   TFun TBool (TFun TBool TBool))
+  -- , ("||",   TFun TBool (TFun TBool TBool))
+    (":",    TFun TInt (TFun TIntList TIntList))
+  , ("head", TFun TIntList TInt)
+  , ("tail", TFun TIntList TIntList)
+  , ("null", TFun TIntList TBool)
   ]
+
+
+      
+      
+-- -- | Types of built-in operators and functions      
+-- preludeTypes :: TypeEnv
+-- preludeTypes =
+--   [ ("+",    Mono (TInt :=> TInt :=> TInt))
+--   , ("-",    error "TBD: -")
+--   , ("*",    error "TBD: *")
+--   , ("/",    error "TBD: /")
+--   , ("==",   error "TBD: ==")
+--   , ("!=",   error "TBD: !=")
+--   , ("<",    error "TBD: <")
+--   , ("<=",   error "TBD: <=")
+--   , ("&&",   error "TBD: &&")
+--   , ("||",   error "TBD: ||")
+--   , ("if",   error "TBD: if")
+--   -- lists: 
+--   , ("[]",   error "TBD: []")
+--   , (":",    error "TBD: :")
+--   , ("head", error "TBD: head")
+--   , ("tail", error "TBD: tail")
+--   ]

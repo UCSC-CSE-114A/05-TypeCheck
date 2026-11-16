@@ -1,0 +1,4 @@
+top =
+    let map (f :: Int -> Int) (xs :: [Int]) :: [Int] =
+        if null xs then [] else f (head xs) : map f (tail xs) in
+            let incr (x :: Int) :: Int = x + 1 in map incr [1, 2, 3, 4]

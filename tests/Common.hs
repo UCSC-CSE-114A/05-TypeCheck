@@ -1,4 +1,3 @@
-
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Common where
@@ -40,7 +39,9 @@ scoreTest' sc (f, x, expR, points, name) =
     actR <- f x
     if actR == expR
       then updateCurrent sc points
-      else assertFailure "Wrong Result"
+      else assertFailure $ "Wrong Result:\n got `" ++ show actR ++ "`\n expected: `" ++ show expR ++ "`"
+
+
 
 updateTotal :: Score -> Int -> IO ()
 updateTotal sc n = modifyIORef sc (\(x, y) -> (x, y + n))

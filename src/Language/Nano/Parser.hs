@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use <$>" #-}
 
 module Language.Nano.Parser (parseString, parseFile) where
 
-import Language.Nano.Types (Expr(..), Binop(..))
+import Language.Nano.Types (Expr(..), Binop(..), Type(..))
 
-import Control.Monad (void)
+import Control.Monad (void, MonadPlus)
 import Control.Monad.Combinators.Expr (makeExprParser, Operator(..))
 import Control.Exception (Exception, throw)
 import Data.Text (Text, pack)
@@ -35,7 +37,7 @@ keyword :: Text -> Parser Text
 keyword k = lexeme (string k <* notFollowedBy alphaNumChar)
 
 rws :: [String]
-rws = ["if", "then", "else", "let", "in", "True", "False"]
+rws = ["if", "then", "else", "let", "in", "True", "False", "Int", "Bool"]
 
 var :: Parser String
 var = lexeme . try $ p >>= check
@@ -60,23 +62,45 @@ if' = do _ <- keyword "if"
          e2 <- expr
          return $ EIf cond e1 e2
 
+-- chainr1 is deprecated in megaparsec, so this replaces it
+chainr1 :: MonadPlus m => m a -> m (a -> a -> a) -> m a
+chainr1 p op = makeExprParser p [[InfixR op]]
+
+
+tyAtom :: Parser Type
+tyAtom = choice [ TInt  <$ keyword "Int"
+                , TBool <$ keyword "Bool"
+                , TIntList <$ (symbol "[" *> keyword "Int" *> symbol "]")
+                , between (symbol "(") (symbol ")") typ ]
+
+typ :: Parser Type
+typ = chainr1 tyAtom (TFun <$ symbol "->")
+
+
+param :: Parser (String, Type)
+param = between (symbol "(") (symbol ")") ((,) <$> var <* symbol "::" <*> typ)
+
 lam :: Parser Expr
 lam = do _ <- symbol "\\"
-         v <- var
+         (v,t) <- param
          _ <- symbol "->"
          e <- expr
-         return $ ELam v e
+         return $ ELam v t e
 
 let' :: Parser Expr
-let' = do _ <- keyword "let"
-          vss <- some var
-          _ <- symbol "="
-          e1 <- expr
-          _ <- keyword "in"
-          e2 <- expr
-          return $ mkLet vss e1 e2
-            where mkLet [] _ _ = error "should never happen; some extracts at least one"
-                  mkLet (v:vs) e1 e2 = ELet v (foldr ELam e1 vs) e2
+let' = do _   <- keyword "let"
+          v   <- var
+          ps  <- many param
+          _   <- symbol "::"
+          t   <- typ
+          _   <- symbol "="
+          e1  <- expr
+          _   <- keyword "in"
+          e2  <- expr
+          let body = foldr (\(x, t) e -> ELam x t e) e1 ps
+              tf   = foldr (\(_, t) r -> TFun t r) t ps
+          return (ELet v tf body e2)
+
 
 term :: Parser Expr
 term = choice
@@ -141,3 +165,9 @@ parseString input = handleError $ runParser top' "string" (pack input)
 parseFile :: String -> IO Expr
 parseFile filename = do contents <- TIO.readFile filename
                         return $ handleError (parse top' filename contents)
+
+-- >>> parseFile "tests/input/3ctest10.no"
+-- let f : Int = \(it : (Int) -> Int) -> \(x : Int) -> (((it) x) + 1) in 
+--  let incr : (Int) -> Int = \(z : Int) -> (z + 1) in 
+--  ((((f) incr)) 10)
+

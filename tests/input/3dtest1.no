@@ -1,0 +1,12 @@
+top =
+  let map (f :: Int -> Int) (xs :: [Int]) :: [Int] =
+    if xs == []
+      then [] 
+      else let h :: Int = head xs in 
+           let t :: [Int] = tail xs in 
+           f h : map f t 
+  in 
+  let incr (x :: Int) :: Int = x + 1 
+  in
+  let l :: [Int] = [1, 2, 3, 4] in
+  map incr l 

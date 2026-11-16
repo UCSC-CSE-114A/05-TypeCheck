@@ -1,0 +1,2 @@
+top =
+    let fac (n :: Int) :: Int = if n <= 1 then 1 else n * fac (n - 1) in fac 5

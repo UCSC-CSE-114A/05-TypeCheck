@@ -1,0 +1,2 @@
+top =
+    if 1 < 2 then 10 else 20

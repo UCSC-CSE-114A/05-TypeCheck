@@ -1,0 +1,3 @@
+top =
+  let const :: Int -> Bool -> Int = \(x :: Int) -> \(y :: Bool) -> x in
+  const 5 True

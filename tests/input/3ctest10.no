@@ -1,0 +1,4 @@
+top =
+  let f (it :: Int -> Int) (x :: Int) :: Int = it x + 1 in
+  let incr :: Int -> Int = \(z :: Int) -> z + 1 in
+  f incr 10
