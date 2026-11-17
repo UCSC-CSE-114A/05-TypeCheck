@@ -117,8 +117,7 @@ env0 =  [ ("z1", VInt 0)
 --------------------------------------------------------------------------------
 lookupId :: Id -> Env -> Value
 --------------------------------------------------------------------------------
-lookupId _ [] = VErr "unbound variable"
-lookupId x ((y,v):vs) = if x == y then v else lookupId x vs
+lookupId = error "TBD:lookupId"
 
 --------------------------------------------------------------------------------
 -- | `eval env e` evaluates the Nano expression `e` in the environment `env`
@@ -189,65 +188,18 @@ lookupId x ((y,v):vs) = if x == y then v else lookupId x vs
 --------------------------------------------------------------------------------
 eval :: Env -> Expr -> Value
 --------------------------------------------------------------------------------
-eval env e = case e of
-  EInt n  -> VInt n
-  EBool b -> VBool b
-  ENil    -> VNil
-  EVar x  -> lookupId x env
-  EBin o e1 e2  -> evalOp o (eval env e1) (eval env e2)
-  EIf e1 e2 e3  -> case eval env e1 of
-    VBool True  -> eval env e2
-    VBool False -> eval env e3
-    _           -> VErr "bad"
-  ELam x _ e    -> VClos env x e
-  EApp e1 e2    -> case eval env e1 of
-    VClos env' x e ->
-      case eval env e2 of
-        VErr m -> VErr m
-        v      -> eval ((x,v):env') e
-    VPrim f -> f (eval env e2)
-    _ -> VErr "not a function"
-  ELet x _ e1 e2 ->
-    let env' = (x,eval env' e1) : env in
-      eval env' e2
+eval = error "TBD:eval"
 
 --------------------------------------------------------------------------------
 evalOp :: Binop -> Value -> Value -> Value
 --------------------------------------------------------------------------------
 
-evalOp Plus (VInt n) (VInt m) = VInt $ n + m
-evalOp Minus (VInt n) (VInt m) = VInt $ n - m
-evalOp Mul (VInt n) (VInt m) = VInt $ n * m
-evalOp Eq v1 v2 = VBool $ v1 == v2
-evalOp Lt (VInt n) (VInt m) = VBool $ n < m
-evalOp Le (VInt n) (VInt m) = VBool $ n <= m
-evalOp Ne v1 v2 = VBool $ v1 /= v2
-evalOp And (VBool b1) (VBool b2) = VBool $ b1 && b2
-evalOp Or (VBool b1) (VBool b2)  = VBool $ b1 || b2
-evalOp Cons (VInt n) VNil = VPair (VInt n) VNil
-evalOp Cons (VInt n) (VPair p1 p2) = VPair (VInt n) (VPair p1 p2)
-evalOp _ _ _ = error "impossible: bad arguments"
+evalOp = error "TBD:evalOp"
 
-
-vTail :: Value -> Value
-vTail (VPair _ v) = v
-vTail _           = error "never happens"
-
-vNull :: Value -> Value
-vNull VNil        = VBool True
-vNull (VPair _ _) = VBool False
-vNull _           = error "never happens"
-
-vHead :: Value -> Value
-vHead (VPair v _) = v
-vHead _           = error "never happens"
 
 prelude :: Env
 prelude =
   [ -- HINT: you may extend this "built-in" environment
-    ("tail", VPrim vTail),
-    ("null", VPrim vNull),
-    ("head", VPrim vHead)
   ]
 
 
@@ -260,6 +212,4 @@ typeSafeEval :: Env -> Expr -> Value
 --   If the expression is type-safe, then evaluate it and return the value.
 --   Otherwise, return `VErr` with some error message.
 
-typeSafeEval env e = case typeCheck preludeTypes e of
-  Ok _ -> eval env e
-  Error m -> VErr m
+typeSafeEval = error "TBD:typeSafeEval"
