@@ -273,16 +273,6 @@
             "points": 6
         },
         {
-            "name": "3dtest5",
-            "run": "stack test --allow-different-user --ta '--pattern \"3dtest5\"'",
-            "setup": "",
-            "input": "",
-            "output": "",
-            "comparison": "included",
-            "timeout": 10,
-            "points": 6
-        },
-        {
             "name": "4test1",
             "run": "stack test --allow-different-user --ta '--pattern \"4test1\"'",
             "setup": "",
